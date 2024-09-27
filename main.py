@@ -11,8 +11,8 @@ JUMP = -30
 PLATFORM_WIDTH = 105
 MIN_GAP = 90
 MAX_GAP = 180
+platforms = pg.sprite.Group()
 
-score = 0
 
 class PLayer(pg.sprite.Sprite):
     def __init__(self):
@@ -21,11 +21,11 @@ class PLayer(pg.sprite.Sprite):
         self.image_right = pg.transform.flip(self.image_left, True, False)
         self.image = self.image_left
         self.rect = self.image.get_rect(center=(W//2, H//2))
+        self.power = 1
         self.speed = 0
 
     def draw(self):
         if self.rect.y > H:
-            # ТУТ ПОТОМ СДЕЛАЕМ ГЕЙМ ОВЕР (но пока респавн для теста)
             self.rect.y = H//2
         else:
             display.blit(self.image, self.rect)
@@ -47,6 +47,11 @@ class PLayer(pg.sprite.Sprite):
         self.speed += GRAVITY
         self.rect.y += self.speed
 
+    def jump(self):
+        self.speed = JUMP*self.power
+        self.power = 1
+
+
 class BasePlatform(pg.sprite.Sprite):
     def __init__(self, x, y, sprite):
         super().__init__()
@@ -54,31 +59,57 @@ class BasePlatform(pg.sprite.Sprite):
         self.rect = self.image.get_rect(topleft=(x, y))
 
     def on_collision(self, player):
-        player.speed = JUMP
+        player.power = 1
+        doodle.jump()
 
-    def update(self):
+    def update(self, doodle):
+        if pg.sprite.spritecollide(doodle, platforms, False) and doodle.speed > 0:
+            self.on_collision(doodle)
         if self.rect.top > H:
             self.kill()
+
 
 class NormalPlatform(BasePlatform):
     def __init__(self, x, y):
         super().__init__(x, y, "img/green.png")
 
+
 class JumpingPlatform(BasePlatform):
     def __init__(self, x, y):
-        super().__init__(x, y, "img/green.png")
-        self.image.set_colorkey("purple")
+        super().__init__(x, y, "img/purple.png")
 
     def on_collision(self, player):
-        player.speed = JUMP + 100
+        player.power = 1.5
+        doodle.jump()
 
-platforms = pg.sprite.Group()
+
+class MovingPlatform(BasePlatform):
+    def __init__(self, x, y):
+        super().__init__(x, y, "img/blue.png")
+        self.direction = 10
+
+    def update(self, doodle):
+        self.rect.x += self.direction
+        if pg.sprite.spritecollide(doodle, platforms, False) and doodle.speed > 0:
+            self.on_collision(doodle)
+        if self.rect.top > H:
+            self.kill()
+        if self.rect.x < 0 or self.rect.right > H-100:
+            self.direction = self.direction * -1
+
+class BreakablePlatform(BasePlatform):
+    def __init__(self, x, y):
+        super().__init__(x, y, "img/red.png")
+
+    def on_collision(self, player):
+        player.power = 0
+        self.image = pg.image.load("img/red_broken.png")
 
 def spawn_platform():
     platform = platforms.sprites()[-1]
     y = platform.rect.y - random.randint(MIN_GAP, MAX_GAP)
     x = random.randint(0, W - PLATFORM_WIDTH)
-    types = [NormalPlatform, JumpingPlatform]
+    types = [NormalPlatform, NormalPlatform, JumpingPlatform, MovingPlatform, BreakablePlatform]
     Plat = random.choice(types)
     platform = Plat(x, y)
     platforms.add(platform)
@@ -96,15 +127,11 @@ def main():
                 return
         #2
         doodle.update()
-        platforms.update()
-        if pg.sprite.spritecollide(doodle, platforms, False) and doodle.speed > 0:
-            doodle.speed = JUMP
+        platforms.update(doodle)
         if len(platforms) < 25:
             spawn_platform()
         if doodle.speed < 0 and doodle.rect.bottom < H / 2:
             doodle.rect.y -= doodle.speed
-            global score
-            score += 1
             for platform in platforms:
                 platform.rect.y -= doodle.speed
         #3
